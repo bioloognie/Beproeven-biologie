@@ -119,7 +119,7 @@
             <li>Wie ziek is geweest, is levenslang immuun.</li>
             <li>De bescherming door het vaccin neemt niet af in de tijd.</li>
             <li>Gevaccineerde en niet-gevaccineerde mensen zijn gelijk verdeeld over het land.</li>
-            <li>De pasgeborene heeft evenveel contacten als ieder ander.</li>
+            <li>De pasgeborene of patiënt heeft evenveel contacten als ieder ander.</li>
           </ul>
         </details>
       </div>
@@ -363,7 +363,7 @@ function update() {
     const b = $('babyVerdict');
     b.style.background = ''; b.style.color = '';
     b.className = 'verdict ' + (sim.attackSus < 0.05 ? 'ok' : 'bad');
-    b.textContent = 'Kans dat een pasgeborene die nog niet gevaccineerd kan worden tijdens deze uitbraak besmet raakt: ' +
+    b.textContent = 'Kans dat een pasgeborene of patiënt die nog niet gevaccineerd kan worden tijdens deze uitbraak besmet raakt: ' +
       nl(sim.attackSus * 100, 1) + '% (aandeel van alle vatbare mensen dat ziek wordt).';
   }
 }
