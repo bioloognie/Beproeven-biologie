@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verspreidingsmodel – groepsimmuniteit</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1d2433; --muted: #5b6475; --line: #dde1e8;
+    --accent: #1f5fa8; --accent-soft: #e6eef8;
+    --vacc: #2e8b57; --sus: #b8bec9; --inf: #c8402f; --rec: #e3a33b; --baby: #7a3fb5;
+    --ok: #2e8b57; --warn: #c8402f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Calibri, Roboto, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.45; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.45rem; margin: 4px 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 14px; font-size: .95rem; }
+  .tabs { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; margin-bottom: 14px; }
+  .tabs button { border: 0; background: transparent; padding: 8px 18px; border-radius: 8px; font-size: .95rem; cursor: pointer; color: var(--muted); font-weight: 600; }
+  .tabs button.on { background: var(--accent); color: #fff; }
+  .grid { display: grid; grid-template-columns: 320px 1fr; gap: 14px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { font-size: 1.02rem; margin: 0 0 10px; }
+  label { display: block; font-size: .88rem; font-weight: 600; margin: 12px 0 4px; }
+  select, input[type=number] { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: .95rem; background: #fff; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .val { float: right; font-weight: 700; color: var(--accent); }
+  .hint { font-size: .8rem; color: var(--muted); margin-top: 3px; }
+  .btn { display: inline-block; border: 1px solid var(--accent); background: var(--accent); color: #fff; padding: 7px 12px; border-radius: 8px; font-size: .88rem; cursor: pointer; font-weight: 600; margin: 8px 6px 0 0; }
+  .btn.ghost { background: #fff; color: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+  .stat { background: var(--accent-soft); border-radius: 10px; padding: 9px 11px; }
+  .stat .k { font-size: .78rem; color: var(--muted); }
+  .stat .v { font-size: 1.25rem; font-weight: 700; }
+  .verdict { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-weight: 600; }
+  .verdict.ok { background: #e6f4ec; color: #1e6b41; }
+  .verdict.bad { background: #fbe9e6; color: #9b2c1e; }
+  canvas { width: 100%; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .dots { display: grid; grid-template-columns: repeat(25, 1fr); gap: 3px; margin-top: 8px; }
+  .dot { aspect-ratio: 1; border-radius: 50%; background: var(--sus); }
+  .dot.v { background: var(--vacc); }
+  .dot.b { background: var(--baby); outline: 2px solid #fff; box-shadow: 0 0 0 2px var(--baby); }
+  .bar { position: relative; height: 26px; background: #eef0f4; border-radius: 8px; margin-top: 10px; overflow: visible; }
+  .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--vacc); border-radius: 8px; }
+  .bar .mark { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--ink); }
+  .bar .mlab { position: absolute; top: -24px; transform: translateX(-50%); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+  .reveal { display: none; margin-top: 8px; padding: 10px 12px; background: #fffaf0; border: 1px dashed #e3a33b; border-radius: 10px; font-size: .92rem; }
+  .reveal.show { display: block; }
+  .tasks ol { padding-left: 20px; margin: 6px 0; }
+  .tasks li { margin-bottom: 6px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input { flex: 1; }
+  .feedback { font-weight: 700; margin-top: 6px; }
+  .hide { display: none !important; }
+  .formula { font-family: Georgia, serif; font-size: 1.05rem; background: #f3f5f9; padding: 6px 10px; border-radius: 8px; display: inline-block; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Verspreidingsmodel: groepsimmuniteit</h1>
+  <p class="sub">Vraagstuk vaccinaties · Onderzoek wat er gebeurt met een uitbraak, en met een pasgeborene die nog niet gevaccineerd kan worden, als de vaccinatiegraad verandert.</p>
+
+  <div class="tabs" role="tablist">
+    <button id="tabH" class="on" onclick="setMode('havo')">Havo</button>
+    <button id="tabV" onclick="setMode('vwo')">Vwo</button>
+  </div>
+
+  <div class="grid">
+    <!-- ============ INSTELLINGEN ============ -->
+    <div>
+      <div class="card">
+        <h2>Instellingen</h2>
+        <label for="disease">Ziekte</label>
+        <select id="disease" onchange="pickDisease()">
+          <option value="mazelen">Mazelen</option>
+          <option value="kinkhoest">Kinkhoest</option>
+          <option value="griep">Griep (seizoensgriep)</option>
+          <option value="covid">COVID-19 (oorspronkelijke variant)</option>
+          <option value="eigen">Eigen waarde</option>
+        </select>
+        <div class="hint" id="diseaseHint"></div>
+
+        <label>R₀ (basisreproductiegetal) <span class="val" id="r0Val"></span></label>
+        <input type="range" id="r0" min="1" max="20" step="0.1" oninput="resetCalc();update()">
+        <div class="hint">Gemiddeld aantal mensen dat één zieke besmet in een populatie waarin niemand immuun is.</div>
+
+        <label>Vaccinatiegraad <span class="val" id="pVal"></span></label>
+        <input type="range" id="p" min="0" max="100" step="0.5" value="85" oninput="update()">
+        <div class="hint">Zoek de werkelijke vaccinatiegraad op en noteer je bron.</div>
+
+        <div class="vwoOnly hide">
+          <label>Effectiviteit van het vaccin <span class="val" id="eVal"></span></label>
+          <input type="range" id="e" min="50" max="100" step="1" value="95" oninput="update()">
+          <div class="hint">Deel van de gevaccineerden dat echt beschermd is.</div>
+
+          <label>Besmettelijke periode (dagen) <span class="val" id="dVal"></span></label>
+          <input type="range" id="d" min="2" max="28" step="1" oninput="update()">
+          <div class="hint">Bepaalt hoe snel de uitbraak verloopt, niet hoe groot hij wordt.</div>
+
+          <button class="btn ghost" onclick="saveCompare()">Bewaar als vergelijking</button>
+          <button class="btn ghost" onclick="clearCompare()">Wis vergelijking</button>
+        </div>
+      </div>
+
+      <div class="card tasks" style="margin-top:14px">
+        <h2>Opdrachten</h2>
+        <ol id="taskList"></ol>
+        <details class="vwoOnly hide">
+          <summary>Aannames van dit model</summary>
+          <ul style="font-size:.9rem;padding-left:18px">
+            <li>Iedereen heeft evenveel contact met iedereen (homogene menging).</li>
+            <li>De bevolking is gesloten: geen geboorten, sterfte of reizigers tijdens de uitbraak.</li>
+            <li>Wie ziek is geweest, is levenslang immuun.</li>
+            <li>De bescherming door het vaccin neemt niet af in de tijd.</li>
+            <li>Gevaccineerde en niet-gevaccineerde mensen zijn gelijk verdeeld over het land.</li>
+            <li>De pasgeborene heeft evenveel contacten als ieder ander.</li>
+          </ul>
+        </details>
+      </div>
+    </div>
+
+    <!-- ============ UITKOMSTEN ============ -->
+    <div>
+      <!-- HAVO: drempel -->
+      <div class="card" id="havoPanel">
+        <h2>De drempel voor groepsimmuniteit</h2>
+        <p style="margin:0">Groepsimmuniteit ontstaat als een zieke gemiddeld minder dan één ander persoon besmet. Bereken eerst zelf welk deel van de bevolking immuun moet zijn:</p>
+        <div class="formula">drempel = 1 − 1 / R₀</div>
+        <label for="ownCalc">Jouw berekening (in %)</label>
+        <div class="row">
+          <input type="text" inputmode="decimal" id="ownCalc" placeholder="bijv. 80,0" style="padding:7px 8px;border:1px solid var(--line);border-radius:8px;font-size:.95rem">
+          <button class="btn" style="margin:0" onclick="checkCalc()">Controleer</button>
+        </div>
+        <div class="feedback" id="calcFeedback"></div>
+        <button class="btn ghost" onclick="toggleReveal('calcReveal')">Toon uitwerking</button>
+        <div class="reveal" id="calcReveal"></div>
+
+        <div id="thresholdBlock" class="hide">
+          <div class="bar"><div class="fill" id="barFill"></div><div class="mark" id="barMark"><span class="mlab" id="barLab"></span></div></div>
+          <div class="legend"><span><i style="background:var(--vacc)"></i>vaccinatiegraad</span><span><i style="background:var(--ink)"></i>drempel</span></div>
+          <div class="verdict" id="havoVerdict"></div>
+        </div>
+      </div>
+
+      <!-- VWO: SIR -->
+      <div class="card vwoOnly hide" id="vwoPanel">
+        <h2>Verloop van een uitbraak (100.000 inwoners, 10 eerste besmettingen)</h2>
+        <canvas id="chart" height="300"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--inf)"></i>besmettelijk (huidige instelling)</span>
+          <span><i style="background:var(--muted);opacity:.6"></i>besmettelijk (vergelijking)</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="k">Effectief reproductiegetal Rₑ</div><div class="v" id="sRe"></div></div>
+          <div class="stat"><div class="k">Drempel (incl. effectiviteit)</div><div class="v" id="sThr"></div></div>
+          <div class="stat"><div class="k">Piek: tegelijk besmettelijk</div><div class="v" id="sPeak"></div></div>
+          <div class="stat"><div class="k">Totaal ziek geworden</div><div class="v" id="sTot"></div></div>
+        </div>
+        <div class="verdict" id="vwoVerdict"></div>
+      </div>
+
+      <!-- Bevolking -->
+      <div class="card" style="margin-top:14px">
+        <h2>Wat betekent dit voor een pasgeborene?</h2>
+        <p style="margin:0;font-size:.92rem">Elke stip is 1 van 200 mensen. De paarse stip is een baby die nog te jong is voor vaccinatie.</p>
+        <div class="dots" id="dots"></div>
+        <div class="legend">
+          <span><i style="background:var(--vacc)"></i>beschermd door vaccinatie</span>
+          <span><i style="background:var(--sus)"></i>vatbaar</span>
+          <span><i style="background:var(--baby)"></i>pasgeborene (vatbaar)</span>
+        </div>
+        <div class="verdict" id="babyVerdict"></div>
+      </div>
+    </div>
+  </div>
+  <p class="hint" style="margin-top:14px">Dit is een vereenvoudigd SIR-model. R₀-waarden verschillen per bron en per situatie: gebruik voor je onderzoek een waarde uit een betrouwbare bron en vermeld die.</p>
+</div>
+
+<script>
+const DISEASES = {
+  mazelen:   { r0: 15,  d: 8,  hint: 'Veelgenoemde schatting R₀: 12–18.' },
+  kinkhoest: { r0: 14,  d: 21, hint: 'Veelgenoemde schatting R₀: 12–17.' },
+  griep:     { r0: 1.5, d: 4,  hint: 'Veelgenoemde schatting R₀: 1,3–2.' },
+  covid:     { r0: 2.5, d: 7,  hint: 'Veelgenoemde schatting R₀ oorspronkelijke variant: 2–3. Latere varianten hoger.' },
+  eigen:     { r0: 5,   d: 7,  hint: 'Kies zelf een waarde en noteer je bron.' },
+};
+const N = 100000, I0 = 10;
+let mode = 'havo', compare = null, revealed = false;
+const $ = id => document.getElementById(id);
+const nl = (x, dec = 0) => x.toLocaleString('nl-NL', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+function setMode(m) {
+  mode = m;
+  $('tabH').classList.toggle('on', m === 'havo');
+  $('tabV').classList.toggle('on', m === 'vwo');
+  document.querySelectorAll('.vwoOnly').forEach(el => el.classList.toggle('hide', m !== 'vwo'));
+  $('havoPanel').classList.toggle('hide', m === 'vwo');
+  renderTasks();
+  update();
+}
+
+function pickDisease() {
+  const d = DISEASES[$('disease').value];
+  $('r0').value = d.r0; $('d').value = d.d;
+  $('diseaseHint').textContent = d.hint;
+  resetCalc();
+  update();
+}
+
+function resetCalc() {
+  revealed = false;
+  $('ownCalc').value = ''; $('calcFeedback').textContent = '';
+  $('calcReveal').classList.remove('show');
+  $('thresholdBlock').classList.add('hide');
+}
+
+function params() {
+  const r0 = +$('r0').value, p = +$('p').value / 100;
+  const e = mode === 'vwo' ? +$('e').value / 100 : 1;
+  const D = +$('d').value || 7;
+  return { r0, p, e, D };
+}
+
+function threshold(r0, e = 1) { return r0 <= 1 ? 0 : (1 - 1 / r0) / e; }
+
+function checkCalc() {
+  const { r0 } = params();
+  const thr = threshold(r0) * 100;
+  const own = parseFloat(String($('ownCalc').value).replace(',', '.'));
+  if (isNaN(own)) { $('calcFeedback').textContent = 'Vul eerst je berekening in.'; return; }
+  if (Math.abs(own - thr) <= 0.6) {
+    $('calcFeedback').innerHTML = '<span style="color:var(--ok)">Klopt! De drempel is ' + nl(thr, 1) + '%.</span>';
+    revealed = true; $('thresholdBlock').classList.remove('hide'); update();
+  } else {
+    $('calcFeedback').innerHTML = '<span style="color:var(--warn)">Nog niet goed. Controleer je berekening: reken eerst 1/R₀ uit.</span>';
+  }
+}
+
+function toggleReveal(id) {
+  const { r0 } = params();
+  const thr = threshold(r0);
+  $('calcReveal').innerHTML = 'R₀ = ' + nl(r0, 1) + '<br>1 / R₀ = 1 / ' + nl(r0, 1) + ' = ' + nl(1 / r0, 3) +
+    '<br>drempel = 1 − ' + nl(1 / r0, 3) + ' = ' + nl(thr, 3) + ' → <b>' + nl(thr * 100, 1) + '%</b> van de bevolking moet immuun zijn.';
+  $(id).classList.toggle('show');
+  revealed = true; $('thresholdBlock').classList.remove('hide'); update();
+}
+
+function simulate({ r0, p, e, D }) {
+  const gamma = 1 / D, beta = r0 * gamma, dt = 0.05;
+  const immuneVacc = N * p * e;
+  let S = Math.max(N - immuneVacc - I0, 0), I = I0, R = 0;
+  const S0 = S + I0;
+  const series = []; let peak = I, peakDay = 0, t = 0;
+  const maxDays = 730;
+  let stepsPerDay = Math.round(1 / dt);
+  for (let day = 0; day <= maxDays; day++) {
+    series.push(I);
+    if (I > peak) { peak = I; peakDay = day; }
+    for (let k = 0; k < stepsPerDay; k++) {
+      const newInf = beta * S * I / N * dt, newRec = gamma * I * dt;
+      S -= newInf; I += newInf - newRec; R += newRec;
+    }
+    if (day > 30 && I < 0.5) { series.push(I); break; }
+  }
+  const total = R + I;
+  return { series, peak, peakDay, total, attackSus: S0 > 0 ? Math.min(total / S0, 1) : 0 };
+}
+
+function drawChart(sim) {
+  const c = $('chart'), ctx = c.getContext('2d');
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth, Hh = 300;
+  c.width = W * dpr; c.height = Hh * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, Hh);
+  const pad = { l: 58, r: 12, t: 12, b: 34 };
+  const all = [sim.series].concat(compare ? [compare.series] : []);
+  const days = Math.max(...all.map(s => s.length), 60);
+  let ymax = Math.max(...all.map(s => Math.max(...s)), 20);
+  const mag = Math.pow(10, Math.floor(Math.log10(ymax)));
+  ymax = Math.ceil(ymax / mag) * mag;
+  const x = d => pad.l + d / days * (W - pad.l - pad.r);
+  const y = v => Hh - pad.b - v / ymax * (Hh - pad.t - pad.b);
+  ctx.strokeStyle = '#dde1e8'; ctx.fillStyle = '#5b6475'; ctx.font = '11px sans-serif'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = ymax * i / 4, yy = y(v);
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.fillText(nl(v), pad.l - 6, yy + 4);
+  }
+  const step = days > 400 ? 100 : days > 150 ? 50 : days > 60 ? 20 : 10;
+  ctx.textAlign = 'center';
+  for (let d = 0; d <= days; d += step) ctx.fillText(d, x(d), Hh - pad.b + 16);
+  ctx.fillText('dagen', (pad.l + W - pad.r) / 2, Hh - 4);
+  ctx.save(); ctx.translate(12, (Hh - pad.b + pad.t) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillText('aantal besmettelijke mensen', 0, 0); ctx.restore();
+  const line = (s, color, dash) => {
+    ctx.beginPath(); ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    s.forEach((v, d) => d ? ctx.lineTo(x(d), y(v)) : ctx.moveTo(x(d), y(v))); ctx.stroke(); ctx.setLineDash([]);
+  };
+  if (compare) line(compare.series, 'rgba(91,100,117,.6)', [6, 5]);
+  line(sim.series, getComputedStyle(document.documentElement).getPropertyValue('--inf').trim());
+}
+
+function drawDots(p, e) {
+  const box = $('dots'); box.innerHTML = '';
+  const nProt = Math.round(200 * p * e);
+  const idx = [...Array(200).keys()];
+  // vaste pseudo-willekeurige volgorde, zodat het beeld niet springt
+  idx.sort((a, b) => ((a * 7919) % 211) - ((b * 7919) % 211));
+  const prot = new Set(idx.slice(0, nProt));
+  for (let i = 0; i < 200; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 112 ? ' b' : prot.has(i) && i !== 112 ? ' v' : '');
+    box.appendChild(d);
+  }
+}
+
+function update() {
+  const P = params();
+  $('r0Val').textContent = nl(P.r0, 1);
+  $('pVal').textContent = nl(P.p * 100, 1) + '%';
+  $('eVal').textContent = nl(P.e * 100) + '%';
+  $('dVal').textContent = $('d').value;
+  drawDots(P.p, P.e);
+  const re = P.r0 * (1 - P.p * P.e);
+
+  if (mode === 'havo') {
+    const thr = threshold(P.r0);
+    $('barFill').style.width = (P.p * 100) + '%';
+    $('barMark').style.left = 'calc(' + (thr * 100) + '% - 1.5px)';
+    $('barLab').textContent = 'drempel ' + nl(thr * 100, 1) + '%';
+    const above = P.p >= thr;
+    const v = $('havoVerdict');
+    v.className = 'verdict ' + (above ? 'ok' : 'bad');
+    v.textContent = above
+      ? 'De vaccinatiegraad ligt boven de drempel: een zieke besmet gemiddeld minder dan één ander. Een uitbraak dooft uit.'
+      : 'De vaccinatiegraad ligt onder de drempel: een zieke besmet gemiddeld meer dan één ander. Een uitbraak kan zich verspreiden.';
+    const b = $('babyVerdict');
+    if (!revealed) { b.className = 'verdict'; b.style.background = '#f3f5f9'; b.style.color = 'var(--muted)'; b.textContent = 'Bereken eerst de drempel hierboven.'; return; }
+    b.style.background = ''; b.style.color = '';
+    b.className = 'verdict ' + (above ? 'ok' : 'bad');
+    b.textContent = above
+      ? 'De baby is zelf niet beschermd, maar de ziekte kan haar moeilijk bereiken: de mensen om haar heen houden de verspreiding tegen.'
+      : 'De baby is niet beschermd, en de mensen om haar heen houden de verspreiding niet tegen. Bij een uitbraak loopt zij een reëel risico.';
+  } else {
+    const sim = simulate(P);
+    drawChart(sim);
+    $('sRe').textContent = nl(re, 2);
+    const thr = threshold(P.r0, P.e);
+    $('sThr').textContent = thr > 1 ? 'niet haalbaar' : nl(thr * 100, 1) + '%';
+    $('sPeak').textContent = nl(sim.peak) + ' (dag ' + sim.peakDay + ')';
+    $('sTot').textContent = nl(sim.total) + ' (' + nl(sim.total / N * 100, 1) + '%)';
+    const v = $('vwoVerdict');
+    v.className = 'verdict ' + (re < 1 ? 'ok' : 'bad');
+    v.textContent = re < 1
+      ? 'Rₑ < 1: elke zieke besmet gemiddeld minder dan één ander. De uitbraak dooft uit.'
+      : 'Rₑ > 1: de uitbraak groeit totdat er te weinig vatbare mensen over zijn.';
+    if (thr > 1) v.textContent += ' Met deze effectiviteit is zelfs 100% vaccinatiegraad niet genoeg.';
+    const b = $('babyVerdict');
+    b.style.background = ''; b.style.color = '';
+    b.className = 'verdict ' + (sim.attackSus < 0.05 ? 'ok' : 'bad');
+    b.textContent = 'Kans dat een pasgeborene die nog niet gevaccineerd kan worden tijdens deze uitbraak besmet raakt: ' +
+      nl(sim.attackSus * 100, 1) + '% (aandeel van alle vatbare mensen dat ziek wordt).';
+  }
+}
+
+function saveCompare() { compare = simulate(params()); update(); }
+function clearCompare() { compare = null; update(); }
+
+function renderTasks() {
+  const H = [
+    'Kies jullie ziekte. Zoek de R₀ op in een betrouwbare bron en stel die in. Noteer de bron.',
+    'Bereken de drempel voor groepsimmuniteit met de formule en controleer je antwoord.',
+    'Zoek de werkelijke vaccinatiegraad op (landelijk en in jullie regio) en stel die in. Ligt die boven of onder de drempel?',
+    'Wat betekent dat voor de pasgeborene? Gebruik het woord groepsimmuniteit in je antwoord.',
+    'Waarom is de drempel voor mazelen veel hoger dan voor griep?',
+  ];
+  const V = [
+    'Stel jullie ziekte, de R₀ (met bron) en de werkelijke vaccinatiegraad in. Beschrijf het verloop van de uitbraak.',
+    'Bewaar dit scenario. Verlaag de vaccinatiegraad met 5 procentpunt. Wat gebeurt er met de piek, het totaal en de kans voor de pasgeborene? Is het verband lineair?',
+    'Varieer de effectiviteit van het vaccin. Leid af hoe de drempel van de effectiviteit afhangt en controleer met de waarde in het model.',
+    'Verander alleen de besmettelijke periode. Wat verandert er wel en wat niet? Verklaar.',
+    'Kies de aanname (zie hieronder) die de uitkomst voor jullie regio het minst betrouwbaar maakt. Wat betekent dat voor je conclusie?',
+  ];
+  $('taskList').innerHTML = (mode === 'vwo' ? V : H).map(t => '<li>' + t + '</li>').join('');
+}
+
+window.addEventListener('resize', () => { if (mode === 'vwo') update(); });
+pickDisease();
+setMode('havo');
+</script>
+</body>
+</html>
